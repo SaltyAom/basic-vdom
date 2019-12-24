@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>VDOM</title>
+		<script>
+			const h = (tagName, attributes = {}, ...children) => {
+					let localAttributes = {},
+						localChildren = []
+
+					if (typeof attributes.style !== "undefined")
+						localAttributes = { style: {} }
+
+					Object.entries(attributes).forEach(
+						([attribute, property]) => {
+							if (attribute === "style")
+								Object.entries(property).forEach(
+									([styleAttribute, styleProperty]) =>
+										(localAttributes.style[
+											styleAttribute
+										] = styleProperty)
+								)
+							else localAttributes[attribute] = property
+						}
+					)
+
+					children.map(child => {
+						typeof child === "string"
+							? localChildren.push(child)
+							: localChildren.push(child)
+					})
+
+					return {
+						tagName: tagName,
+						attributes: localAttributes,
+						children: localChildren
+					}
+				},
+				diff = (oldNode, newNode) => {
+					let difference = { children: [], attributes: {} },
+						oldChildren = []
+
+					// Convert DOM nodes to children
+					if (oldNode.childNodes)
+						oldNode.childNodes.forEach((node, index) => {
+							if (typeof node.tagName === "undefined")
+								oldChildren.push(
+									node.textContent
+										.toString()
+										.replace(/\t|\n/g, "")
+								)
+							else oldChildren.push(node)
+						})
+
+					if (typeof oldNode === "undefined") return newNode
+
+					// Declare style
+					if (
+						typeof oldNode.attributes.style !== "undefined" ||
+						typeof newNode.attributes.style !== "undefined"
+					)
+						difference.attributes = { style: {} }
+
+					// TagName
+					if (oldNode.tagName !== newNode.tagName)
+						difference.tagName = newNode.tagName
+
+					// Attribute
+					if (typeof oldNode.attributes === "undefined")
+						difference.attributes = newNode.attributes
+					else if (typeof newNode.attributes === "undefined")
+						difference.attributes = {}
+					else
+						Object.entries(newNode.attributes).forEach(
+							([attribute, property]) => {
+								// Style property
+								if (attribute === "style")
+									if (
+										typeof oldNode.attributes.style ===
+										"undefined"
+									)
+										return (difference.attributes.style = property)
+									else
+										return Object.entries(
+											newNode.attributes.style
+										).forEach(
+											([
+												styleAttribute,
+												styleProperty
+											]) => {
+												if (
+													styleProperty !==
+													oldNode.attributes.style[
+														styleAttribute
+													]
+												)
+													return (difference.attributes.style[
+														styleAttribute
+													] = styleProperty)
+											}
+										)
+
+								// Any other property
+								if (
+									typeof oldNode.attributes[attribute] ===
+										"undefined" ||
+									property !== oldNode.attributes[attribute]
+								)
+									difference.attributes[attribute] = property
+							}
+						)
+
+					// Children
+					if (
+						JSON.stringify(oldChildren) !==
+						JSON.stringify(newNode.children)
+					)
+						newNode.children.forEach((child, index) => {
+							if (typeof oldChildren[index] === "string")
+								if (oldChildren[index] !== child)
+									difference.children[index] = child
+								else return
+							else
+								return (difference.children[index] = diff(
+									oldChildren[index],
+									child
+								))
+						})
+
+					return difference
+				},
+				construct = ({ tagName, attributes, children = [] }) => {
+					let vNode = document.createElement(tagName)
+
+					Object.entries(attributes).forEach(
+						([attribute, property]) =>
+							attribute === "style"
+								? Object.entries(attributes.style).forEach(
+										([styleAttribute, styleProperty]) => {
+											vNode.style[
+												styleAttribute
+											] = styleProperty
+										}
+								  )
+								: vNode.setAttribute(attribute, property)
+					)
+
+					children.forEach(child =>
+						typeof child === "string"
+							? vNode.appendChild(document.createTextNode(child))
+							: vNode.appendChild(construct(child))
+					)
+
+					return vNode
+				},
+				applyDiff = (oldNode, difference) => {
+					let vNode = oldNode,
+						{ attributes, children } = difference,
+						oldChildren = oldNode.childNodes || oldNode.children
+
+					if (
+						typeof tagName !== "undefined" &&
+						typeof difference.tagName !== "undefined" &&
+						oldNode.tagName !== difference.tagName.toUpperCase()
+					)
+						vNode.tagName = difference.tagName.toUpperCase()
+
+					Object.entries(
+						attributes
+					).forEach(([attribute, property]) =>
+						attribute === "style"
+							? Object.entries(attributes.style).forEach(
+									([styleAttribute, styleProperty]) =>
+										(vNode.style[
+											styleAttribute
+										] = styleProperty)
+							  )
+							: vNode.setAttribute(attribute, property)
+					)
+
+					difference.children.forEach((newChild, index) => {
+						if (typeof newChild === "string")
+							return (vNode.childNodes[
+								index
+							].textContent = newChild)
+
+						applyDiff(vNode.childNodes[index], newChild)
+					})
+
+					return difference
+				},
+				render = (vNode, target) => {
+					if (typeof target.children[0] === "undefined")
+						return target.appendChild(vNode)
+
+					applyDiff(
+						target.children[0],
+						diff(target.children[0], vNode)
+					)
+				}
+
+			document.addEventListener("DOMContentLoaded", () => {
+				render(
+					h(
+						"div",
+						{
+							class: "text"
+						},
+						"A simple",
+						h(
+							"h1",
+							{
+								class: "text",
+								style: {
+									fontSize: "48px",
+									fontWeight: "bold"
+								}
+							},
+							"Virtual DOM!!"
+						)
+					),
+					document.getElementById("root")
+				)
+			})
+			updateVDOM = () =>
+				render(
+					h(
+						"div",
+						{
+							class: "text"
+						},
+						"A simple",
+						h(
+							"h1",
+							{
+								class: "text",
+								style: {
+									color: "red",
+									fontSize: "48px",
+									fontWeight: "bold"
+								}
+							},
+							"Virtual DOM!!"
+						)
+					),
+					document.getElementById("root")
+				)
+		</script>
+		<style>
+			.text {
+				font-weight: normal;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+					Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans",
+					"Helvetica Neue", sans-serif;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="root">
+			<div>
+				A simple
+				<h1>
+					Virtual DOM
+				</h1>
+			</div>
+			<button id="update" onClick="updateVDOM()">
+				update
+			</button>
+		</div>
+	</body>
+</html>
