@@ -16,7 +16,7 @@
 						  )
 						: updateValue,
 				applySensitiveProperty = (attributes, localAttributes) =>
-					mapObject(attributes, ([attribute, property],) =>
+					mapObject(attributes, ([attribute, property]) =>
 						attribute === "style"
 							? applyProperty(property, localAttributes.style)
 							: (localAttributes[attribute] = property)
@@ -70,8 +70,10 @@
 					)
 						difference.attributes = { style: {} }
 
-					// Compare tagname
-					if (oldNode.tagName !== newNode.tagName)
+					if (
+						oldNode.tagName.toUpperCase() !==
+						newNode.tagName.toUpperCase()
+					)
 						difference.tagName = newNode.tagName
 
 					// Attribute
@@ -139,35 +141,62 @@
 					return vNode
 				},
 				applyDiff = (oldNode, difference) => {
-					let vNode = oldNode,
+					let vNode,
 						{ attributes, children } = difference,
-						oldChildren = oldNode.childNodes || oldNode.children
+						oldChildren = []
+
+					// Convert DOM nodes to children
+					if (oldNode.childNodes)
+						oldNode.childNodes.forEach((node, index) =>
+							isUndefined(node.tagName)
+								? oldChildren.push(
+										node.textContent
+											.toString()
+											.replace(/\t|\n/g, "")
+								  )
+								: oldChildren.push(node)
+						)
 
 					if (
-						!isUndefined(difference.tagName) !== "undefined" &&
-						oldNode.tagName !== difference.tagName.toUpperCase()
+						!isUndefined(difference.tagName) &&
+						oldNode.tagName.toUpperCase() !==
+							difference.tagName.toUpperCase()
 					)
-						vNode.tagName = difference.tagName.toUpperCase()
+						return oldNode.parentNode.replaceChild(
+							construct(
+								h(
+									[difference.tagName],
+									{
+										...Object.assign(
+											oldNode.attributes,
+											difference.attributes
+										)
+									},
+									...oldChildren
+								)
+							),
+							oldNode
+						)
 
-					applySensitiveProperty(attributes, vNode)
+                    vNode = oldNode
 
-					difference.children.forEach((newChild, index) =>
-						isString(newChild)
-							? (vNode.childNodes[index].textContent = newChild)
-							: applyDiff(vNode.childNodes[index], newChild)
-					)
+                    applySensitiveProperty(attributes, vNode)
 
-					return difference
+                    difference.children.forEach((newChild, index) =>
+                        isString(newChild)
+                            ? (vNode.childNodes[
+                                    index
+                                ].textContent = newChild)
+                            : applyDiff(vNode.childNodes[index], newChild)
+                    )
 				},
-				render = (vNode, target) => {
-					if (typeof target.children[0] === "undefined")
-						return target.appendChild(vNode)
-
-					applyDiff(
-						target.children[0],
-						diff(target.children[0], vNode)
-					)
-				}
+				render = (vNode, target) =>
+					typeof target.children[0] === "undefined"
+						? target.appendChild(vNode)
+						: applyDiff(
+								target.children[0],
+								diff(target.children[0], vNode)
+						  )
 
 			document.addEventListener("DOMContentLoaded", () => {
 				render(
@@ -229,9 +258,9 @@
 		<div id="root">
 			<div>
 				A simple
-				<h1>
+				<h2>
 					Virtual DOM
-				</h1>
+				</h2>
 			</div>
 			<button id="update" onClick="updateVDOM()">
 				update
