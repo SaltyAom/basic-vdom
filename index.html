@@ -3,31 +3,41 @@
 	<head>
 		<title>VDOM</title>
 		<script>
+			const mapObject = (iterator, callback) =>
+					Object.entries(iterator).map(callback),
+				isString = value => typeof value === "string",
+				isUndefined = value => typeof value === "undefined",
+				applyProperty = (iterator, updateValue, condition = true) =>
+					condition
+						? mapObject(
+								iterator,
+								([attribute, property]) =>
+									(updateValue[attribute] = property)
+						  )
+						: updateValue,
+				applySensitiveProperty = (attributes, localAttributes) =>
+					mapObject(attributes, ([attribute, property],) =>
+						attribute === "style"
+							? applyProperty(property, localAttributes.style)
+							: (localAttributes[attribute] = property)
+					),
+				hasSameChildren = (oldChildren, newChildren) =>
+					JSON.stringify(oldChildren) !== JSON.stringify(newChildren)
+
 			const h = (tagName, attributes = {}, ...children) => {
 					let localAttributes = {},
 						localChildren = []
 
-					if (typeof attributes.style !== "undefined")
+					if (!isUndefined(attributes.style))
 						localAttributes = { style: {} }
 
-					Object.entries(attributes).forEach(
-						([attribute, property]) => {
-							if (attribute === "style")
-								Object.entries(property).forEach(
-									([styleAttribute, styleProperty]) =>
-										(localAttributes.style[
-											styleAttribute
-										] = styleProperty)
-								)
-							else localAttributes[attribute] = property
-						}
-					)
+					applySensitiveProperty(attributes, localAttributes)
 
-					children.map(child => {
-						typeof child === "string"
+					children.map(child =>
+						isString(child)
 							? localChildren.push(child)
 							: localChildren.push(child)
-					})
+					)
 
 					return {
 						tagName: tagName,
@@ -39,113 +49,89 @@
 					let difference = { children: [], attributes: {} },
 						oldChildren = []
 
+					if (isUndefined(oldNode)) return newNode
+
 					// Convert DOM nodes to children
 					if (oldNode.childNodes)
-						oldNode.childNodes.forEach((node, index) => {
-							if (typeof node.tagName === "undefined")
-								oldChildren.push(
-									node.textContent
-										.toString()
-										.replace(/\t|\n/g, "")
-								)
-							else oldChildren.push(node)
-						})
+						oldNode.childNodes.forEach((node, index) =>
+							isUndefined(node.tagName)
+								? oldChildren.push(
+										node.textContent
+											.toString()
+											.replace(/\t|\n/g, "")
+								  )
+								: oldChildren.push(node)
+						)
 
-					if (typeof oldNode === "undefined") return newNode
-
-					// Declare style
+					// Declare style if style are available
 					if (
 						typeof oldNode.attributes.style !== "undefined" ||
 						typeof newNode.attributes.style !== "undefined"
 					)
 						difference.attributes = { style: {} }
 
-					// TagName
+					// Compare tagname
 					if (oldNode.tagName !== newNode.tagName)
 						difference.tagName = newNode.tagName
 
 					// Attribute
-					if (typeof oldNode.attributes === "undefined")
+					if (isUndefined(oldNode.attributes))
 						difference.attributes = newNode.attributes
-					else if (typeof newNode.attributes === "undefined")
+					else if (isUndefined(newNode.attributes))
 						difference.attributes = {}
 					else
-						Object.entries(newNode.attributes).forEach(
+						mapObject(
+							newNode.attributes,
 							([attribute, property]) => {
 								// Style property
 								if (attribute === "style")
 									if (
-										typeof oldNode.attributes.style ===
+										typeof oldNode.attributes.style !==
 										"undefined"
 									)
-										return (difference.attributes.style = property)
-									else
-										return Object.entries(
-											newNode.attributes.style
-										).forEach(
-											([
-												styleAttribute,
-												styleProperty
-											]) => {
-												if (
-													styleProperty !==
-													oldNode.attributes.style[
-														styleAttribute
-													]
-												)
-													return (difference.attributes.style[
-														styleAttribute
-													] = styleProperty)
-											}
+										return applyProperty(
+											newNode.attributes.style,
+											difference.attributes.style
 										)
+									else
+										return (difference.attributes.style = property)
 
-								// Any other property
 								if (
-									typeof oldNode.attributes[attribute] ===
-										"undefined" ||
+									isUndefined(
+										oldNode.attributes[attribute]
+									) ||
 									property !== oldNode.attributes[attribute]
 								)
-									difference.attributes[attribute] = property
+									return (difference.attributes[
+										attribute
+									] = property)
+
+								return
 							}
 						)
 
 					// Children
-					if (
-						JSON.stringify(oldChildren) !==
-						JSON.stringify(newNode.children)
-					)
-						newNode.children.forEach((child, index) => {
-							if (typeof oldChildren[index] === "string")
-								if (oldChildren[index] !== child)
-									difference.children[index] = child
-								else return
-							else
-								return (difference.children[index] = diff(
-									oldChildren[index],
-									child
-								))
-						})
+					if (hasSameChildren(oldChildren, newNode.children))
+						newNode.children.forEach((child, index) =>
+							isString(oldChildren[index])
+								? oldChildren[index] !== child
+									? (difference.children[index] = child)
+									: null
+								: (difference.children[index] = diff(
+										oldChildren[index],
+										child
+								  ))
+						)
 
 					return difference
 				},
 				construct = ({ tagName, attributes, children = [] }) => {
 					let vNode = document.createElement(tagName)
 
-					Object.entries(attributes).forEach(
-						([attribute, property]) =>
-							attribute === "style"
-								? Object.entries(attributes.style).forEach(
-										([styleAttribute, styleProperty]) => {
-											vNode.style[
-												styleAttribute
-											] = styleProperty
-										}
-								  )
-								: vNode.setAttribute(attribute, property)
-					)
+					applySensitiveProperty(attributes, vNode)
 
 					children.forEach(child =>
-						typeof child === "string"
+						isString(child)
 							? vNode.appendChild(document.createTextNode(child))
 							: vNode.appendChild(construct(child))
 					)
@@ -158,33 +144,18 @@
 						oldChildren = oldNode.childNodes || oldNode.children
 
 					if (
-						typeof tagName !== "undefined" &&
-						typeof difference.tagName !== "undefined" &&
+						!isUndefined(difference.tagName) !== "undefined" &&
 						oldNode.tagName !== difference.tagName.toUpperCase()
 					)
 						vNode.tagName = difference.tagName.toUpperCase()
 
-					Object.entries(
-						attributes
-					).forEach(([attribute, property]) =>
-						attribute === "style"
-							? Object.entries(attributes.style).forEach(
-									([styleAttribute, styleProperty]) =>
-										(vNode.style[
-											styleAttribute
-										] = styleProperty)
-							  )
-							: vNode.setAttribute(attribute, property)
+					applySensitiveProperty(attributes, vNode)
+
+					difference.children.forEach((newChild, index) =>
+						isString(newChild)
+							? (vNode.childNodes[index].textContent = newChild)
+							: applyDiff(vNode.childNodes[index], newChild)
 					)
-
-					difference.children.forEach((newChild, index) => {
-						if (typeof newChild === "string")
-							return (vNode.childNodes[
-								index
-							].textContent = newChild)
-
-						applyDiff(vNode.childNodes[index], newChild)
-					})
 
 					return difference
 				},
