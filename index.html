@@ -12,17 +12,23 @@
 						? mapObject(
 								iterator,
 								([attribute, property]) =>
-									(updateValue[attribute] = property)
+									(updateValue[
+										convertClassName(attribute)
+									] = property)
 						  )
 						: updateValue,
 				applySensitiveProperty = (attributes, localAttributes) =>
 					mapObject(attributes, ([attribute, property]) =>
 						attribute === "style"
 							? applyProperty(property, localAttributes.style)
-							: (localAttributes[attribute] = property)
+							: (localAttributes[
+									convertClassName(attribute)
+							  ] = property)
 					),
 				hasSameChildren = (oldChildren, newChildren) =>
-					JSON.stringify(oldChildren) !== JSON.stringify(newChildren)
+					JSON.stringify(oldChildren) !== JSON.stringify(newChildren),
+				convertClassName = attribute =>
+					attribute === "class" ? "className" : attribute
 
 			const h = (tagName, attributes = {}, ...children) => {
 					let localAttributes = {},
@@ -161,7 +167,13 @@
 						!isUndefined(difference.tagName) &&
 						oldNode.tagName.toUpperCase() !==
 							difference.tagName.toUpperCase()
-					)
+					) {
+						let newChildren = oldChildren.map((oldChild, index) =>
+							isUndefined(difference.children[index]) ||
+							oldChild === difference.children[index]
+								? oldChildren
+								: difference.children[index]
+						)
 						return oldNode.parentNode.replaceChild(
 							construct(
 								h(
@@ -172,31 +184,32 @@
 											difference.attributes
 										)
 									},
-									...oldChildren
+									...newChildren
 								)
 							),
 							oldNode
 						)
+					}
 
-                    vNode = oldNode
+					vNode = oldNode
 
-                    applySensitiveProperty(attributes, vNode)
+					applySensitiveProperty(attributes, vNode)
 
-                    difference.children.forEach((newChild, index) =>
-                        isString(newChild)
-                            ? (vNode.childNodes[
-                                    index
-                                ].textContent = newChild)
-                            : applyDiff(vNode.childNodes[index], newChild)
-                    )
+					difference.children.forEach((newChild, index) =>
+						isString(newChild)
+							? (vNode.childNodes[index].textContent = newChild)
+							: applyDiff(vNode.childNodes[index], newChild)
+					)
 				},
-				render = (vNode, target) =>
+				render = (vNode, target) => {
 					typeof target.children[0] === "undefined"
-						? target.appendChild(vNode)
+						? target.appendChild(construct(vNode))
 						: applyDiff(
 								target.children[0],
-								diff(target.children[0], vNode)
+								diff(target.children[0], vNode),
+								vNode
 						  )
+				}
 
 			document.addEventListener("DOMContentLoaded", () => {
 				render(
@@ -215,7 +228,15 @@
 									fontWeight: "bold"
 								}
 							},
-							"Virtual DOM!!"
+							"Virtual DOM",
+							h(
+								"button",
+								{
+									class: "text",
+									onclick: () => updateVDOM()
+								},
+								"Update"
+							)
 						)
 					),
 					document.getElementById("root")
@@ -239,7 +260,15 @@
 									fontWeight: "bold"
 								}
 							},
-							"Virtual DOM!!"
+							"Virtual DOM!!",
+							h(
+								"button",
+								{
+									class: "text",
+									onclick: () => updateVDOM()
+								},
+								"Update"
+							)
 						)
 					),
 					document.getElementById("root")
@@ -256,15 +285,6 @@
 	</head>
 	<body>
 		<div id="root">
-			<div>
-				A simple
-				<h2>
-					Virtual DOM
-				</h2>
-			</div>
-			<button id="update" onClick="updateVDOM()">
-				update
-			</button>
 		</div>
 	</body>
 </html>
