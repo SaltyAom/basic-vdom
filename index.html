@@ -34,10 +34,11 @@
 					let localAttributes = {},
 						localChildren = []
 
-					if (!isUndefined(attributes.style))
+					if (attributes !== null && !isUndefined(attributes.style))
 						localAttributes = { style: {} }
 
-					applySensitiveProperty(attributes, localAttributes)
+					if (attributes !== null)
+						applySensitiveProperty(attributes, localAttributes)
 
 					children.map(child =>
 						isString(child)
@@ -201,7 +202,7 @@
 							: applyDiff(vNode.childNodes[index], newChild)
 					)
 				},
-				render = (vNode, target) => {
+				render = (vNode, target) =>
 					typeof target.children[0] === "undefined"
 						? target.appendChild(construct(vNode))
 						: applyDiff(
@@ -209,7 +210,6 @@
 								diff(target.children[0], vNode),
 								vNode
 						  )
-				}
 
 			document.addEventListener("DOMContentLoaded", () => {
 				render(
@@ -284,7 +284,6 @@
 		</style>
 	</head>
 	<body>
-		<div id="root">
-		</div>
+		<div id="root"></div>
 	</body>
 </html>
